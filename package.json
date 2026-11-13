@@ -9,5 +9,9 @@
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "test": "npm run test --workspaces --if-present"
   },
-  "workspaces": ["apps/*", "packages/*", "mock-provider"]
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "mock-provider"
+  ]
 }

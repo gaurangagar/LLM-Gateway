@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ApiKey {
+  id               String       @id @default(uuid())
+  name             String
+  keyHash          String       @unique   // SHA-256 of the raw key; raw key is shown once
+  keyPrefix        String                 // e.g. "gw_live_ab12", safe to display
+  rateLimitRpm     Int          @default(60)
+  rateLimitTpm     Int          @default(60000)
+  monthlyBudgetUsd Decimal      @default(10) @db.Decimal(12, 4)
+  allowedModels    String[]     @default([]) // empty = all models allowed
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime     @default(now())
+  requests         RequestLog[]
+
+  @@map("api_keys")
+}
+
+model Provider {
+  id           String   @id @default(uuid())
+  name         String   @unique            // "groq", "openai", ...
+  baseUrl      String
+  encryptedKey String?                     // later; env keys are used at first
+  priority     Int      @default(100)      // lower = tried first
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@map("providers")
+}
+
+model ModelPricing {
+  id               String  @id @default(uuid())
+  provider         String
+  model            String
+  inputPricePer1k  Decimal @db.Decimal(12, 6)
+  outputPricePer1k Decimal @db.Decimal(12, 6)
+
+  @@unique([provider, model])
+  @@map("model_pricing")
+}
+
+// Named RequestLog on purpose: a model called "Request" would shadow
+// the global fetch `Request` type in your code.
+model RequestLog {
+  id            String   @id                 // the gateway's request ID
+  apiKeyId      String
+  apiKey        ApiKey   @relation(fields: [apiKeyId], references: [id])
+  model         String
+  provider      String?                      // null if rejected before routing
+  stream        Boolean  @default(false)
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  costUsd       Decimal  @default(0) @db.Decimal(12, 6)
+  latencyMs     Int
+  ttftMs        Int?                         // time to first token (streams)
+  cacheHit      Boolean  @default(false)
+  fallbackUsed  Boolean  @default(false)
+  status        Int                          // HTTP status returned to the client
+  errorType     String?
+  createdAt     DateTime @default(now())
+
+  @@index([apiKeyId, createdAt])
+  @@index([provider, createdAt])
+  @@index([createdAt])
+  @@map("requests")
+}
